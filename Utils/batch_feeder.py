@@ -2,15 +2,18 @@ import numpy as np
 from parse_data import *
 
 def main():
-	print 'hLLO'
-	create_data_set("Test.csv", "Test_vecs.txt", steps=10)
+	create_data_set("../data/test.csv", "Test_vecs.txt", steps=10)
 
+def xavier_initializer(shape, **kwargs):
+	epsilon = np.sqrt(6) / np.sqrt(np.sum(np.array(shape)))
+    out = tf.random_uniform(shape, minval=-epsilon, maxval=epsilon)
+    ### END YOUR CODE
+    return out
 
 def create_data_set(filename, wv_filename, steps=10):
 	vocab = Vocab()
 	training_set = parse_data_set(vocab, filename)
 	embedding_data_frame = create_embedding_matrix(vocab, wv_filename)
-	print embedding_data_frame
 	return training_set, np.array(embedding_data_frame['word_vecs'])
 
 def data_iterator(orig_X, orig_y=None, batch_size=32, label_size=2, shuffle=False):

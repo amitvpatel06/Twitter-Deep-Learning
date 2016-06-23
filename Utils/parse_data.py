@@ -83,14 +83,19 @@ def parse_data_iterator(vocab, filename, delimiter=",", steps=10):
 		words = tokenizer.tokenize(" ".join(row[3:]))
 		for i in range(steps): 
 			if i < len(words):
-				words[i] = canon_word(str(words[i]))
-				vocab.add_word(str(words[i]))
+				try:
+					words[i] = str(words[i])
+				except:
+					words[i] = words[i]
+				words[i] = canon_word(words[i])
+				vocab.add_word(words[i])
 				curr.append(words[i])
 			else:
 				curr.append('</s>')
 		for word in curr:
 			encoded.append(vocab.encode(word))
 		yield label, curr
+		
 
 
 def parse_data_set(vocab, filename, delimiter=",", steps=10): 
@@ -108,8 +113,12 @@ def parse_data_set(vocab, filename, delimiter=",", steps=10):
 		words = tokenizer.tokenize(" ".join(row[3:]))
 		for i in range(steps): 
 			if i < len(words):
-				words[i] = canon_word(str(words[i]))
-				vocab.add_word(str(words[i]))
+				try:
+					words[i] = str(words[i])
+				except:
+					words[i] = words[i]
+				words[i] = canon_word(words[i])
+				vocab.add_word(words[i])
 				curr.append(words[i])
 			else:
 				curr.append('</s>')
@@ -118,7 +127,6 @@ def parse_data_set(vocab, filename, delimiter=",", steps=10):
 	encoded = [[vocab.encode(word) for word in sentence] for sentence in list_of_train ]
 	results = {'labels': labels, 'training_examples':list_of_train, 'encoded':encoded}
 	parsed_data = pd.DataFrame(data=results)
-	print (vocab.index_to_word)
 	return parsed_data
 
 def create_embedding_matrix(vocab, wv_filename):
