@@ -79,7 +79,11 @@ def parse_data_iterator(vocab, filename, delimiter=",", steps=10):
 	for row in reader:
 		curr = []
 		encoded = []
-		label = row[1]
+		label = [row[1]]
+		if(row[1] == 0):
+			label.append(1)
+		else:
+			label.append(0)
 		words = tokenizer.tokenize(" ".join(row[3:]))
 		for i in range(steps): 
 			if i < len(words):
@@ -95,7 +99,7 @@ def parse_data_iterator(vocab, filename, delimiter=",", steps=10):
 		for word in curr:
 			encoded.append(vocab.encode(word))
 		yield label, curr
-		
+
 
 
 def parse_data_set(vocab, filename, delimiter=",", steps=10): 
@@ -109,7 +113,12 @@ def parse_data_set(vocab, filename, delimiter=",", steps=10):
 	tokenizer = TweetTokenizer(preserve_case=False, strip_handles=True, reduce_len=False)
 	for row in reader:
 		curr = []
-		labels.append(row[1])
+		label = [row[1]]
+		if(int(row[1]) == 0):
+			label.append(1)
+		else:
+			label.append(0)
+		labels.append(label)
 		words = tokenizer.tokenize(" ".join(row[3:]))
 		for i in range(steps): 
 			if i < len(words):
@@ -125,16 +134,20 @@ def parse_data_set(vocab, filename, delimiter=",", steps=10):
 		list_of_train.append(curr)
 		# for now we are going to leave out the else case because batching is too slow for unever lenght sentences
 	encoded = [[vocab.encode(word) for word in sentence] for sentence in list_of_train ]
+	encoded = np.array(encoded).astype(np.int32)
+	labels = np.array(labels).astype(np.int32)
 	results = {'labels': labels, 'training_examples':list_of_train, 'encoded':encoded}
-	parsed_data = pd.DataFrame(data=results)
-	return parsed_data
+	return results
+
+def xavier_initializer(shape):
+    epsilon = np.sqrt(6) / np.sqrt(np.sum(np.array(shape)))
+    out = np.random.uniform(low=-epsilon, high=epsilon, size=shape)
+    return out
 
 def create_embedding_matrix(vocab, wv_filename):
 	""" Should have filled vocab when you execute this method!!"""
 	word_map = pd.DataFrame.from_dict(vocab.index_to_word, orient="index")
-	import pdb
-	pdb.set_trace()
-	word_vecs = np.zeros([len(vocab.index_to_word), 50])
+	word_vecs = xavier_initializer([len(vocab.index_to_word), 50])
 	word_map['word_vecs'] = word_vecs.tolist()
 	file = open(wv_filename, 'r')
 	processed = set
@@ -142,8 +155,9 @@ def create_embedding_matrix(vocab, wv_filename):
 		line = line.split()
 		word = line[0]
 		if word in vocab.word_to_index:
-			word_map['word_vecs'][vocab.word_to_index[word]] = np.array(line[1:])
-	return word_map
+			word_vecs[vocab.word_to_index[word]] = line[1:]
+	word_vecs = np.array(word_vecs).astype(np.float32)
+	return word_vecs
 
 
 if __name__ == "__main__":

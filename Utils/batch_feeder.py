@@ -2,21 +2,18 @@ import numpy as np
 from parse_data import *
 
 def main():
-	create_data_set("../data/test.csv", "Test_vecs.txt", steps=10)
+	vocab = Vocab()	
+	x, y, z = create_data_set(vocab, "Test.csv", "Test_vecs.txt", steps=10)
+	import pdb
+	pdb.set_trace()
 
-def xavier_initializer(shape, **kwargs):
-	epsilon = np.sqrt(6) / np.sqrt(np.sum(np.array(shape)))
-    out = tf.random_uniform(shape, minval=-epsilon, maxval=epsilon)
-    ### END YOUR CODE
-    return out
-
-def create_data_set(filename, wv_filename, steps=10):
-	vocab = Vocab()
+def create_data_set(vocab, filename, wv_filename, steps=10):
 	training_set = parse_data_set(vocab, filename)
-	embedding_data_frame = create_embedding_matrix(vocab, wv_filename)
-	return training_set, np.array(embedding_data_frame['word_vecs'])
+	embedding_matrix = create_embedding_matrix(vocab, wv_filename)	
+	return (training_set['encoded'], 
+		training_set['labels'], embedding_matrix)
 
-def data_iterator(orig_X, orig_y=None, batch_size=32, label_size=2, shuffle=False):
+def data_iterator(orig_X, orig_y, batch_size=100, label_size=2, shuffle=True):
   # Optionally shuffle the data before training
   if shuffle:
     indices = np.random.permutation(len(orig_X))
@@ -32,17 +29,9 @@ def data_iterator(orig_X, orig_y=None, batch_size=32, label_size=2, shuffle=Fals
     # Create the batch by selecting up to batch_size elements
     batch_start = step * batch_size
     x = data_X[batch_start:batch_start + batch_size]
-    # Convert our target from the class index to a one hot vector
-    y = None
-    if np.any(data_y):
-      y_indices = data_y[batch_start:batch_start + batch_size]
-      y = np.zeros((len(x), label_size), dtype=np.int32)
-      y[np.arange(len(y_indices)), y_indices] = 1
-    ###
+    y = data_y[batch_start:batch_start + batch_size]
     yield x, y
-    total_processed_examples += len(x)
-  # Sanity check to make sure we iterated over all the dataset as intended
-  assert total_processed_examples == len(data_X), 'Expected {} and processed {}'.format(len(data_X), total_processed_examples)
+ 
 
 if __name__ == "__main__":
 	main()
