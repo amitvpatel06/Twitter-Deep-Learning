@@ -136,7 +136,7 @@ def parse_data_set(vocab, filename, delimiter=",", steps=10):
 	encoded = [[vocab.encode(word) for word in sentence] for sentence in list_of_train ]
 	encoded = np.array(encoded).astype(np.int32)
 	labels = np.array(labels).astype(np.int32)
-	results = {'labels': labels, 'training_examples':list_of_train, 'encoded':encoded}
+	results = {'labels': labels, 'encoded':encoded}
 	return results
 
 def xavier_initializer(shape):

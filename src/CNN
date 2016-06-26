@@ -12,9 +12,10 @@ from tensorflow.python.ops.seq2seq import sequence_loss
 
 import tensorflow as tf
 
-class RNN: 
 
-	def __init__(self, config, debug):
+class CNN: 
+
+	def __init__(self, config, filters, debug):
 		self.config = config
 		self.load_data(debugMode=debug)
 		predictions = self.build_model_graph()
@@ -22,11 +23,11 @@ class RNN:
 
 
 	def build_model_graph(self): 
-		# creat inputs placeholders for inputs
+		# create inputs placeholders for inputs
 		self.input_placeholder = tf.placeholder(tf.int32, shape=(None, self.config.steps), name = 'inputs')
 		self.labels_placeholder = tf.placeholder(tf.float32, shape=(None, 2), name ='labels')
 		self.dropout_placeholder = tf.placeholder(tf.float32, name = 'dropout')
-		self.L = tf.get_variable('L', shape = [len(self.vocab.word_to_index), self.config.embed_size])
+
 		with tf.device('/cpu:0'):
 			embed = tf.nn.embedding_lookup(self.L, self.input_placeholder)
 			inputs = [tf.squeeze(x, [1]) for x in tf.split(1, self.config.steps, embed)]
@@ -53,8 +54,7 @@ class RNN:
 		return predictions
 
 	def add_training_objective(self, predictions):
-		correct = tf.equal(tf.argmax(tf.nn.softmax(predictions),1), tf.argmax(self.labels_placeholder,1))
-		self.percent = tf.reduce_mean(tf.cast(correct,tf.float32))
+		self.predictions = tf.nn.softmax(predictions)
 		self.loss = tf.reduce_sum(
 			tf.nn.softmax_cross_entropy_with_logits(predictions, self.labels_placeholder))
 		optimizer = tf.train.AdamOptimizer(self.config.lr)
@@ -64,20 +64,26 @@ class RNN:
 	def load_data(self, debugMode=False):
 		self.vocab = Vocab()
 		if not debugMode:
-			self.encoded_train, self.labels = create_data_set(self.vocab, 'train.csv', 
+			self.encoded_train, self.labels = create_data_set(self.vocab, 'test.csv', 
 				steps=self.config.steps)
 			self.encoded_valid, self.valid_labels = create_data_set(self.vocab, 'dev.csv', 
 				steps=self.config.steps)
+			self.encoded_test, self.valid_test = create_data_set(self.vocab, 'test.csv', 
+				steps=self.config.steps)
 		else: 
-			self.encoded_train, self.labels = create_data_set(self.vocab, "Test.csv")
-
-	def run_epoch(self, session, data, train=None, print_freq=10):
+			self.encoded_train, self.labels = create_data_set(self.vocab, "test.csv", "Test_vecs.txt", steps=10)
+		self.L = create_embedding_matrix(self.vocab, 'Test_vecs.txt')
+		
+	def run_epoch(self, session, data, train=None, print_freq=100):
 		if data == "train" or data == 'debug':
 			encoded = self.encoded_train
 			labels = self.labels
 		elif data == "valid":
 			encoded = self.encoded_valid
 			labels = self.valid_labels
+		else: 
+			encoded = self.encoded_test
+			labels = self.valid_test
 		dropout = self.config.dropout
 		if not train:
 			train = tf.no_op()
@@ -89,17 +95,29 @@ class RNN:
 			feed = {
 				self.input_placeholder: batch_inputs,
 				self.labels_placeholder: batch_labels,
-				self.dropout_placeholder: dropout,
+				self.dropout_placeholder: dropout
 			}
-			loss, state, percent, _ = session.run(
-				[self.loss, self.final_state, self.percent, self.train_grad], feed_dict=feed)
-			total_percent.append(percent * 100)
+			loss, state, predictions,_ = session.run(
+				[self.loss, self.final_state, self.predictions, self.train_grad], feed_dict=feed)
+			percent = percent_right(predictions, labels, self.config.batch_size) * 100
+			total_percent.append(percent)
 			total_loss.append(loss)
 			if step % print_freq == 0:
-				print ('\r{} / {} ,{}% : CE = {}'.format(
+				sys.stdout.write('\r{} / {} ,{}% : CE = {}'.format(
 					step, total_steps, np.mean(total_percent), np.mean(total_loss)))
+				sys.stdout.flush()
 		return np.mean(total_loss)
-
+ 
+def percent_right(predicted, actual, number):
+	right = 0
+	for prob, actual in zip(predicted, actual):
+		if(prob[0] > 0.5):
+			if actual[0] == 1:
+				right +=1
+		else:
+			if actual[0] == 0:
+				right +=1
+	return (right * 1.0 /number)
 
 def run_RNN(num_epochs, debug=False):
 	config = Config()

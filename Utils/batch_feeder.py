@@ -3,15 +3,14 @@ from parse_data import *
 
 def main():
 	vocab = Vocab()	
-	x, y, z = create_data_set(vocab, "Test.csv", "Test_vecs.txt", steps=10)
+	x, y, z = create_data_set(vocab, "../data/train.csv", "Test_vecs.txt", steps=10)
 	import pdb
 	pdb.set_trace()
 
-def create_data_set(vocab, filename, wv_filename, steps=10):
+def create_data_set(vocab, filename, steps=10):
 	training_set = parse_data_set(vocab, filename)
-	embedding_matrix = create_embedding_matrix(vocab, wv_filename)	
 	return (training_set['encoded'], 
-		training_set['labels'], embedding_matrix)
+		training_set['labels'])
 
 def data_iterator(orig_X, orig_y, batch_size=100, label_size=2, shuffle=True):
   # Optionally shuffle the data before training
@@ -24,7 +23,7 @@ def data_iterator(orig_X, orig_y, batch_size=100, label_size=2, shuffle=True):
     data_y = orig_y
   ###
   total_processed_examples = 0
-  total_steps = int(np.ceil(len(data_X) / float(batch_size)))
+  total_steps = int(np.ceil(len(data_X) / float(batch_size))) - 1
   for step in xrange(total_steps):
     # Create the batch by selecting up to batch_size elements
     batch_start = step * batch_size
