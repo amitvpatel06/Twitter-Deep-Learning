@@ -5,8 +5,8 @@ import time
 import numpy as np
 from copy import deepcopy
 
-from batch_feeder import *
-from parse_data import *
+from utils.batch_feeder import *
+from utils.parse_data import *
 from config import Config
 from tensorflow.python.ops.seq2seq import sequence_loss
 
@@ -26,7 +26,8 @@ class RNN:
 		self.input_placeholder = tf.placeholder(tf.int32, shape=(None, self.config.steps), name = 'inputs')
 		self.labels_placeholder = tf.placeholder(tf.float32, shape=(None, 2), name ='labels')
 		self.dropout_placeholder = tf.placeholder(tf.float32, name = 'dropout')
-		self.L = tf.get_variable('L', shape = [len(self.vocab.word_to_index), self.config.embed_size])
+		self.L = tf.get_variable('L', shape = [len(self.vocab.word_to_index), self.config.embed_size],
+									initializer=tf.contrib.layers.xavier_initializer())
 		with tf.device('/cpu:0'):
 			embed = tf.nn.embedding_lookup(self.L, self.input_placeholder)
 			inputs = [tf.squeeze(x, [1]) for x in tf.split(1, self.config.steps, embed)]
@@ -45,9 +46,10 @@ class RNN:
 					tf.matmul(self.state, H) + tf.matmul(inputs[i], I) + b)
 				rnn_outputs.append(tf.nn.dropout(self.state, self.dropout_placeholder))
 			self.final_state = rnn_outputs[-1]
+			
 		with tf.variable_scope('projection'):
 			U = tf.get_variable('U', shape=[self.config.hidden_size, 2])
-			b_2 = tf.get_variable('b2', shape=[1])
+			b_2 = tf.get_variable('b2', shape=[2 	])
 			outputs = (tf.matmul(self.final_state, U) + b_2)
 		predictions = tf.cast(outputs, 'float32')
 		return predictions
@@ -59,7 +61,6 @@ class RNN:
 			tf.nn.softmax_cross_entropy_with_logits(predictions, self.labels_placeholder))
 		optimizer = tf.train.AdamOptimizer(self.config.lr)
 		self.train_grad = optimizer.minimize(self.loss)
-		# need to add training objectives and feed dict code
 
 	def load_data(self, debugMode=False):
 		self.vocab = Vocab()

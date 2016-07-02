@@ -139,15 +139,15 @@ def parse_data_set(vocab, filename, delimiter=",", steps=10):
 	results = {'labels': labels, 'encoded':encoded}
 	return results
 
-def xavier_initializer(shape):
+def xavier_initializer(shape, **kwargs):
     epsilon = np.sqrt(6) / np.sqrt(np.sum(np.array(shape)))
     out = np.random.uniform(low=-epsilon, high=epsilon, size=shape)
     return out
 
-def create_embedding_matrix(vocab, wv_filename):
+def create_embedding_matrix(vocab, wv_filename, dims):
 	""" Should have filled vocab when you execute this method!!"""
 	word_map = pd.DataFrame.from_dict(vocab.index_to_word, orient="index")
-	word_vecs = xavier_initializer([len(vocab.index_to_word), 50])
+	word_vecs = xavier_initializer([len(vocab.index_to_word), dims])
 	word_map['word_vecs'] = word_vecs.tolist()
 	file = open(wv_filename, 'r')
 	processed = set
