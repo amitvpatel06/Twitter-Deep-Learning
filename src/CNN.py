@@ -8,14 +8,14 @@ from copy import deepcopy
 from utils.batch_feeder import *
 from utils.parse_data import *
 from tensorflow.python.ops.seq2seq import sequence_loss
-
+from config import Config
 import tensorflow as tf
 
 
 class Filters:
-	def __init__(self, filters, num_filters):
+	def __init__(self):
 		self.filter_sizes =  [3, 4, 5]
-		self.num_filters = 2
+		self.num_filters = 40
 
 class CNN: 
 
@@ -24,6 +24,7 @@ class CNN:
 		self.filters = filters
 		self.load_data(debugMode=debug)
 		predictions = self.build_model_graph()
+		self.inference = tf.nn.softmax(predictions)
 		self.add_training_objective(predictions)
 
 
@@ -45,35 +46,36 @@ class CNN:
 		for i, size in enumerate(self.filters.filter_sizes):
 			with tf.name_scope("convolution_size_{}".format(size)):
 				shape = [size, self.config.embed_size, 1, self.filters.num_filters]
-				filt = tf.Variable(tf.truncated_normal(filter_shape, stddev=0.1), name="filter")
+				filt = tf.Variable(tf.truncated_normal(shape, stddev=0.1), name="filter")
 				convolved_features = tf.nn.conv2d(
 						self.expanded_inputs,
 						filt,
-						strides= [1,1,1,1]
+						strides= [1,1,1,1],
 						padding="VALID",
 						name="conv_features"
 				)
 				bias = tf.Variable(tf.constant(0.1, shape=[self.filters.num_filters]), name="bias")
 				if self.config.l2:
-         			tf.add_to_collection('L2', self.config.l2 * (tf.nn.l2_loss(filt)))
-         			tf.add_to_collection('L2', self.config.l2 * (tf.nn.l2_loss(bias)))
-				conv_hidden = tf.nn.relu(tf.nn.add_bias(convolved_features, bias), name="RELU")
+					tf.add_to_collection('L2', self.config.l2 * (tf.nn.l2_loss(filt)))
+					tf.add_to_collection('L2', self.config.l2 * (tf.nn.l2_loss(bias)))
+				conv_hidden = tf.nn.relu(tf.nn.bias_add(convolved_features, bias), name="RELU")
 				pooled_features = tf.nn.max_pool(conv_hidden, 
-												ksizes=[1, self.config.steps - size + 1, 1, 1]
+												ksize=[1, self.config.steps - size + 1, 1, 1],
 												strides=[1,1,1,1],
+												padding='VALID',
 												name="pooled_features")
 				pool_outputs.append(pooled_features)
 
-		self.hidden = tf.reshape(tf.concat(3, pool_outputs), [-1, num_filters * len(filter_sizes)])
-		self.hidden_with_dropout = tf.nn.droput(self.hidden, self.dropout_placeholder)
+		self.hidden = tf.reshape(tf.concat(3, pool_outputs), [-1, self.filters.num_filters * len(self.filters.filter_sizes)])
+		self.hidden_with_dropout = tf.nn.dropout(self.hidden, self.dropout_placeholder)
 		# embed into classification vector
 		with tf.variable_scope('projection'):
-			U = tf.get_variable('U', shape=[num_filters * len(filter_sizes), 2])
+			U = tf.get_variable('U', shape=[self.filters.num_filters * len(self.filters.filter_sizes), 2])
 			b_2 = tf.get_variable('b2', shape=[2])
 			outputs = (tf.matmul(self.hidden_with_dropout, U) + b_2)
 			if self.config.l2:
-         		tf.add_to_collection('L2', self.config.l2 * (tf.nn.l2_loss(U)))
-         		tf.add_to_collection('L2', self.config.l2 * (tf.nn.l2_loss(b_2)))
+				tf.add_to_collection('L2', self.config.l2 * (tf.nn.l2_loss(U)))
+				tf.add_to_collection('L2', self.config.l2 * (tf.nn.l2_loss(b_2)))
 		return outputs
 
 
@@ -82,7 +84,7 @@ class CNN:
 		self.percent = tf.reduce_mean(tf.cast(correct,tf.float32))
 		self.CE = tf.reduce_sum(
 			tf.nn.softmax_cross_entropy_with_logits(predictions, self.labels_placeholder))
-		self.loss = tf.add_n(tf.get_collection('L2')) + CE
+		self.loss = tf.add_n(tf.get_collection('L2')) + self.CE
 		optimizer = tf.train.AdamOptimizer(self.config.lr)
 		self.train_grad = optimizer.minimize(self.loss)
 		# need to add training objectives and feed dict code
@@ -90,14 +92,14 @@ class CNN:
 	def load_data(self, debugMode=False):
 		self.vocab = Vocab()
 		if not debugMode:
-			self.encoded_train, self.labels = create_data_set(self.vocab, 'test.csv', 
+			self.encoded_train, self.labels = create_data_set(self.vocab, 'dev.csv', 
 				steps=self.config.steps)
-			self.encoded_valid, self.valid_labels = create_data_set(self.vocab, 'dev.csv', 
+			self.encoded_valid, self.valid_labels = create_data_set(self.vocab, 'test.csv', 
 				steps=self.config.steps)
 			self.encoded_test, self.valid_test = create_data_set(self.vocab, 'test.csv', 
 				steps=self.config.steps)
 		else: 
-			self.encoded_train, self.labels = create_data_set(self.vocab, "test.csv", "Test_vecs.txt", steps=10)
+			self.encoded_train, self.labels = create_data_set(self.vocab, "Test.csv", steps=self.config.steps)
 		
 	def run_epoch(self, session, data, train=None, print_freq=100):
 		if data == "train" or data == 'debug':
@@ -122,33 +124,22 @@ class CNN:
 				self.labels_placeholder: batch_labels,
 				self.dropout_placeholder: dropout
 			}
-			loss, state, predictions,_ = session.run(
-				[self.loss, self.final_state, self.predictions, self.train_grad], feed_dict=feed)
-			percent = percent_right(predictions, labels, self.config.batch_size) * 100
-			total_percent.append(percent)
+			loss, predictions, percent, _ = session.run(
+				[self.CE, self.inference, 
+					self.percent, self.train_grad], feed_dict=feed)
+			total_percent.append(percent*100)
 			total_loss.append(loss)
 			if step % print_freq == 0:
 				sys.stdout.write('\r{} / {} ,{}% : CE = {}'.format(
 					step, total_steps, np.mean(total_percent), np.mean(total_loss)))
 				sys.stdout.flush()
 		return np.mean(total_loss)
- 
-def percent_right(predicted, actual, number):
-	right = 0
-	for prob, actual in zip(predicted, actual):
-		if(prob[0] > 0.5):
-			if actual[0] == 1:
-				right +=1
-		else:
-			if actual[0] == 0:
-				right +=1
-	return (right * 1.0 /number)
 
-def run_RNN(num_epochs, debug=False):
+def run_CNN(num_epochs, debug=False):
 	config = Config()
-	
-	with tf.variable_scope('RNN') as scope:
-		model = RNN(config, debug)
+	filters = Filters()
+	with tf.variable_scope('CNN') as scope:
+		model = CNN(config, filters, debug)
 	init = tf.initialize_all_variables()
 	saver = tf.train.Saver()
 	with tf.Session() as session:
@@ -161,16 +152,17 @@ def run_RNN(num_epochs, debug=False):
 			train_ce = model.run_epoch(
 				session, 'debug',
 				train=model.train_grad)
-			valid_ce = model.run_epoch(session, 'valid')
 			print 'Training CE loss: {}'.format(train_ce)
-			print 'Validation CE loss: {}'.format(valid_ce)
-			if valid_ce < best_val_ce:
-				best_val_pp = valid_ce
-				best_val_epoch = epoch
-				saver.save(session, './rnn.weights')
-			if epoch - best_val_epoch > config.early_stopping:
-				break
+			if not debug:
+				valid_ce = model.run_epoch(session, 'valid')
+				print 'Validation CE loss: {}'.format(valid_ce)
+				if valid_ce < best_val_ce:
+					best_val_pp = valid_ce
+					best_val_epoch = epoch
+					saver.save(session, './cnn.weights')
+				if epoch - best_val_epoch > config.early_stopping:
+					break
 		print 'Total time: {}'.format(time.time() - start)
 
 if __name__ == "__main__":
-	run_RNN(10, debug=False)
+	run_CNN(10, debug=False)
