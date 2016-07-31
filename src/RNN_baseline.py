@@ -72,7 +72,7 @@ class RNN:
 		else: 
 			self.encoded_train, self.labels = create_data_set(self.vocab, "Test.csv")
 
-	def run_epoch(self, session, data, train=None, print_freq=10):
+	def run_epoch(self, session, data, train=None, print_freq=100):
 		if data == "train" or data == 'debug':
 			encoded = self.encoded_train
 			labels = self.labels
@@ -128,7 +128,7 @@ def run_RNN(num_epochs, debug=False):
 				if valid_ce < best_val_ce:
 					best_val_pp = valid_ce
 					best_val_epoch = epoch
-					saver.save(session, './cnn.weights')
+					saver.save(session, './rnn.weights')
 				if epoch - best_val_epoch > config.early_stopping:
 					break
 				epoch_summary = {
