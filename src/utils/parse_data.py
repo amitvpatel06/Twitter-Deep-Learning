@@ -4,7 +4,17 @@ import re
 import pandas as pd
 from collections import defaultdict
 from nltk.tokenize.casual import TweetTokenizer
+import csv
 
+def write_summary(data, headers, name):
+	out_file = open(name, 'w+')
+	writer = csv.DictWriter(out_file, fieldnames=headers, lineterminator = '\n')
+	header_row = {}
+	for header in headers:
+		header_row[header] = header
+	writer.writerow(header_row)
+	for row in data:
+		writer.writerow(row)
 
 def main():
 	print 'hLLO'
@@ -158,6 +168,7 @@ def create_embedding_matrix(vocab, wv_filename, dims):
 			word_vecs[vocab.word_to_index[word]] = line[1:]
 	word_vecs = np.array(word_vecs).astype(np.float32)
 	return word_vecs
+
 
 
 if __name__ == "__main__":

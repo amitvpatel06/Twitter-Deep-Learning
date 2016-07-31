@@ -97,9 +97,10 @@ class RNN:
 			total_percent.append(percent * 100)
 			total_loss.append(loss)
 			if step % print_freq == 0:
-				print ('\r{} / {} ,{}% : CE = {}'.format(
+				sys.stdout.write('\r{} / {} ,{}% : CE = {}'.format(
 					step, total_steps, np.mean(total_percent), np.mean(total_loss)))
-		return np.mean(total_loss)
+				sys.stdout.flush()
+		return (np.mean(total_loss), np.mean(total_percent))
 
 
 def run_RNN(num_epochs, debug=False):
@@ -109,6 +110,7 @@ def run_RNN(num_epochs, debug=False):
 		model = RNN(config, debug)
 	init = tf.initialize_all_variables()
 	saver = tf.train.Saver()
+	summary = []
 	with tf.Session() as session:
 		session.run(init)
 		best_val_ce = float('inf')
@@ -116,19 +118,40 @@ def run_RNN(num_epochs, debug=False):
 		for epoch in xrange(num_epochs):
 			print 'Epoch {}'.format(epoch)
 			start = time.time()
-			train_ce = model.run_epoch(
+			train_ce, train_percent = model.run_epoch(
 				session, 'debug',
 				train=model.train_grad)
-			valid_ce = model.run_epoch(session, 'valid')
 			print 'Training CE loss: {}'.format(train_ce)
-			print 'Validation CE loss: {}'.format(valid_ce)
-			if valid_ce < best_val_ce:
-				best_val_pp = valid_ce
-				best_val_epoch = epoch
-				saver.save(session, './rnn.weights')
-			if epoch - best_val_epoch > config.early_stopping:
-				break
+			if not debug:
+				valid_ce, valid_percent = model.run_epoch(session, 'valid')
+				print 'Validation CE loss: {}'.format(valid_ce)
+				if valid_ce < best_val_ce:
+					best_val_pp = valid_ce
+					best_val_epoch = epoch
+					saver.save(session, './cnn.weights')
+				if epoch - best_val_epoch > config.early_stopping:
+					break
+				epoch_summary = {
+					'Epoch': epoch,
+					'Train CE': train_ce,
+					'Valid CE': valid_ce,
+					'Train Percent': train_percent,
+					'Valid Percent': valid_percent
+				}
+				summary.append(epoch_summary)
+			else:
+				epoch_summary = {
+					'Epoch': epoch,
+					'Train CE': 1,
+					'Valid CE': 1,
+					'Train Percent': 1,
+					'Valid Percent': 1
+				}
+				summary.append(epoch_summary)
+		print summary
+		write_summary(summary, ['Epoch', 'Train CE', 'Valid CE',
+											'Train Percent', 'Valid Percent'], 'summary.csv')
 		print 'Total time: {}'.format(time.time() - start)
 
 if __name__ == "__main__":
-	run_RNN(10, debug=False)
+	run_RNN(30, debug=False)

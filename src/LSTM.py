@@ -34,11 +34,13 @@ class RNN:
 
 		lstm_forward = tf.nn.rnn_cell.BasicLSTMCell(self.config.hidden_size)
 		lstm_backward = tf.nn.rnn_cell.BasicLSTMCell(self.config.hidden_size)
-		forward = rnn_cell.MultiRNNCell([lstm_forward] * 3)
-		backward = rnn_cell.MultiRNNCell([lstm_backward] * 3)
+		forward = tf.nn.rnn_cell.MultiRNNCell([lstm_forward] * 3)
+		backward = tf.nn.rnn_cell.MultiRNNCell([lstm_backward] * 3)
 
-		rnn_outputs, f_final, b_final = tf.nn.bidirectional_rnn(forward, backward, inputs)
-		self.final_state = tf.concat(0, [f_final, b_final])
+
+		rnn_outputs, f_final, b_final = tf.nn.bidirectional_rnn(forward, backward, inputs, dtype=tf.float32)
+
+		self.final_state = rnn_outputs[-1]
 		with tf.variable_scope('projection'):
 			U = tf.get_variable('U', shape=[2 * self.config.hidden_size, 2])
 			b_2 = tf.get_variable('b2', shape=[2])
@@ -53,14 +55,14 @@ class RNN:
 		correct = tf.equal(tf.argmax(tf.nn.softmax(predictions),1), tf.argmax(self.labels_placeholder,1))
 		self.percent = tf.reduce_mean(tf.cast(correct,tf.float32))
 		self.loss = tf.reduce_sum(
-			tf.nn.softmax_cross_entropy_with_logits(predictions, self.labels_placeholder)) + tf.add_n(tf.get_collection('L2'))
+			tf.nn.softmax_cross_entropy_with_logits(predictions, self.labels_placeholder)) + tf.add_n(tf.get_collection('L2'))	
 		optimizer = tf.train.AdamOptimizer(self.config.lr)
 		self.train_grad = optimizer.minimize(self.loss)
 
 	def load_data(self, debugMode=False):
 		self.vocab = Vocab()
 		if not debugMode:
-			self.encoded_train, self.labels = create_data_set(self.vocab, 'train.csv', 
+			self.encoded_train, self.labels = create_data_set(self.vocab, 'test.csv', 
 				steps=self.config.steps)
 			self.encoded_valid, self.valid_labels = create_data_set(self.vocab, 'dev.csv', 
 				steps=self.config.steps)
@@ -114,16 +116,18 @@ def run_RNN(num_epochs, debug=False):
 			train_ce = model.run_epoch(
 				session, 'debug',
 				train=model.train_grad)
-			valid_ce = model.run_epoch(session, 'valid')
-			print 'Training CE loss: {}'.format(train_ce)
-			print 'Validation CE loss: {}'.format(valid_ce)
-			if valid_ce < best_val_ce:
-				best_val_pp = valid_ce
-				best_val_epoch = epoch
-				saver.save(session, './rnn.weights')
-			if epoch - best_val_epoch > config.early_stopping:
-				break
+			if not debug: 
+				valid_ce = model.run_epoch(session, 'valid')
+
+				print 'Training CE loss: {}'.format(train_ce)
+				print 'Validation CE loss: {}'.format(valid_ce)
+				if valid_ce < best_val_ce:
+					best_val_pp = valid_ce
+					best_val_epoch = epoch
+					saver.save(session, './rnn.weights')
+				if epoch - best_val_epoch > config.early_stopping:
+					break
 		print 'Total time: {}'.format(time.time() - start)
 
 if __name__ == "__main__":
-	run_RNN(10, debug=False)
+	run_RNN(30, debug=True)

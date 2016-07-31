@@ -2,6 +2,8 @@ import getpass
 import sys
 import time
 
+
+
 import numpy as np
 from copy import deepcopy
 
@@ -92,9 +94,9 @@ class CNN:
 	def load_data(self, debugMode=False):
 		self.vocab = Vocab()
 		if not debugMode:
-			self.encoded_train, self.labels = create_data_set(self.vocab, 'dev.csv', 
+			self.encoded_train, self.labels = create_data_set(self.vocab, 'train.csv', 
 				steps=self.config.steps)
-			self.encoded_valid, self.valid_labels = create_data_set(self.vocab, 'test.csv', 
+			self.encoded_valid, self.valid_labels = create_data_set(self.vocab, 'dev.csv', 
 				steps=self.config.steps)
 			self.encoded_test, self.valid_test = create_data_set(self.vocab, 'test.csv', 
 				steps=self.config.steps)
@@ -133,11 +135,12 @@ class CNN:
 				sys.stdout.write('\r{} / {} ,{}% : CE = {}'.format(
 					step, total_steps, np.mean(total_percent), np.mean(total_loss)))
 				sys.stdout.flush()
-		return np.mean(total_loss)
+		return (np.mean(total_loss), np.mean(total_percent))
 
 def run_CNN(num_epochs, debug=False):
 	config = Config()
 	filters = Filters()
+	summary = []
 	with tf.variable_scope('CNN') as scope:
 		model = CNN(config, filters, debug)
 	init = tf.initialize_all_variables()
@@ -149,12 +152,12 @@ def run_CNN(num_epochs, debug=False):
 		for epoch in xrange(num_epochs):
 			print 'Epoch {}'.format(epoch)
 			start = time.time()
-			train_ce = model.run_epoch(
+			train_ce, train_percent = model.run_epoch(
 				session, 'debug',
 				train=model.train_grad)
 			print 'Training CE loss: {}'.format(train_ce)
 			if not debug:
-				valid_ce = model.run_epoch(session, 'valid')
+				valid_ce, valid_percent = model.run_epoch(session, 'valid')
 				print 'Validation CE loss: {}'.format(valid_ce)
 				if valid_ce < best_val_ce:
 					best_val_pp = valid_ce
@@ -162,7 +165,27 @@ def run_CNN(num_epochs, debug=False):
 					saver.save(session, './cnn.weights')
 				if epoch - best_val_epoch > config.early_stopping:
 					break
+				epoch_summary = {
+					'Epoch': epoch,
+					'Train CE': train_ce,
+					'Valid CE': valid_ce,
+					'Train Percent': train_percent,
+					'Valid Percent': valid_percent
+				}
+				summary.append(epoch_summary)
+			else:
+				epoch_summary = {
+					'Epoch': epoch,
+					'Train CE': 1,
+					'Valid CE': 1,
+					'Train Percent': 1,
+					'Valid Percent': 1
+				}
+				summary.append(epoch_summary)
+		print summary
+		write_summary(summary, ['Epoch', 'Train CE', 'Valid CE',
+											'Train Percent', 'Valid Percent'], 'summary.csv')
 		print 'Total time: {}'.format(time.time() - start)
 
 if __name__ == "__main__":
-	run_CNN(10, debug=False)
+	run_CNN(30, debug=False)
